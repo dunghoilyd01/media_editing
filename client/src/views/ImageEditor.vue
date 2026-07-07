@@ -15,8 +15,15 @@
 
     <div v-else class="editor-layout">
       <div class="image-section">
-        <div class="image-container">
-          <img :src="imagePreview" ref="img" alt="preview" @load="imgLoaded = true" />
+        <div class="image-container" ref="container"
+          @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp">
+          <div class="image-viewport" :class="{ 'blur-mode': blurMode && !isDrawing }">
+            <img :src="imagePreview" ref="img" :style="imgStyle" @load="onImgLoad" />
+            <div v-for="(r, i) in blurRegions" :key="i" class="blur-preview" :style="blurStyle(r)"></div>
+            <div v-if="isDrawing" class="draw-rect" :style="drawRectStyle"></div>
+            <div v-if="showCrop && imgNaturalWidth" class="crop-overlay" :style="cropOverlayStyle"></div>
+            <div v-if="showCrop && imgNaturalWidth" class="crop-window" :style="cropWindowStyle"></div>
+          </div>
         </div>
         <div class="toolbar">
           <button @click="rotateLeft">Rotate -90</button>
@@ -24,7 +31,10 @@
           <button @click="flipHoriz">Flip H</button>
           <button @click="flipVert">Flip V</button>
           <button @click="showCrop = !showCrop" :class="{ active: showCrop }">Crop</button>
-          <button @click="showBlurModal = true">Blur Regions</button>
+          <button @click="blurMode = !blurMode" :class="{ active: blurMode }" :disabled="!imgNaturalWidth">
+            {{ blurMode ? 'Cancel Blur' : 'Blur Select' }}
+          </button>
+          <button @click="showBlurModal = true" :disabled="!imgNaturalWidth">Blur List</button>
           <select v-model="exportFormat">
             <option value="">Original format</option>
             <option value="jpeg">JPEG</option>
@@ -51,22 +61,24 @@
         </div>
 
         <div v-if="showCrop" class="crop-controls">
-          <h3>Crop</h3>
+          <h3 style="display:flex;align-items:center;gap:8px;">
+            Crop
+            <button class="unit-btn" @click="cropUnit = cropUnit === 'px' ? '%' : 'px'">{{ cropUnit }}</button>
+          </h3>
           <div class="crop-grid">
-            <label>X: <input type="number" v-model.number="crop.x" /></label>
-            <label>Y: <input type="number" v-model.number="crop.y" /></label>
-            <label>W: <input type="number" v-model.number="crop.width" /></label>
-            <label>H: <input type="number" v-model.number="crop.height" /></label>
+            <label>X: <input type="number" :value="cropDisplay.x" @input="setCrop('x', $event.target.value)" min="0" :max="cropUnit === '%' ? 100 : imgNaturalWidth" :step="cropUnit === '%' ? 0.1 : 1" /></label>
+            <label>Y: <input type="number" :value="cropDisplay.y" @input="setCrop('y', $event.target.value)" min="0" :max="cropUnit === '%' ? 100 : imgNaturalHeight" :step="cropUnit === '%' ? 0.1 : 1" /></label>
+            <label>W: <input type="number" :value="cropDisplay.width" @input="setCrop('width', $event.target.value)" min="1" :max="cropUnit === '%' ? 100 : imgNaturalWidth" :step="cropUnit === '%' ? 0.1 : 1" /></label>
+            <label>H: <input type="number" :value="cropDisplay.height" @input="setCrop('height', $event.target.value)" min="1" :max="cropUnit === '%' ? 100 : imgNaturalHeight" :step="cropUnit === '%' ? 0.1 : 1" /></label>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Blur Regions Modal -->
     <div v-if="showBlurModal" class="modal-overlay" @click.self="showBlurModal = false">
       <div class="modal">
-        <h2>Blur Regions</h2>
-        <p class="modal-hint">Regions to blur before export.</p>
+        <h2>Blur Regions ({{ blurRegions.length }})</h2>
+        <p class="modal-hint">Drag on the image in Blur Select mode, or edit values below.</p>
         <div class="sub-edit-list">
           <div v-for="(r, i) in blurRegions" :key="i" class="sub-edit-row">
             <label>X <input type="number" v-model.number="r.x" class="time-input-sm" /></label>
@@ -96,14 +108,47 @@ export default {
       uploading: false,
       processing: false,
       imgLoaded: false,
+      imgNaturalWidth: 0,
+      imgNaturalHeight: 0,
       rotation: 0,
       flipMode: '',
       crop: { x: 0, y: 0, width: 100, height: 100 },
+      cropUnit: 'px',
       showCrop: false,
+      blurMode: false,
+      isDrawing: false,
+      drawStart: null,
+      drawCurrent: null,
       showBlurModal: false,
       blurRegions: [],
       exportFormat: '',
     }
+  },
+  computed: {
+    imgTransform() {
+      const t = []
+      if (this.rotation) t.push(`rotate(${this.rotation}deg)`)
+      if (this.flipMode === 'horizontal') t.push('scaleX(-1)')
+      if (this.flipMode === 'vertical') t.push('scaleY(-1)')
+      return t.join(' ')
+    },
+    imgStyle() {
+      return {
+        transform: this.imgTransform,
+        transition: 'transform 0.2s ease',
+      }
+    },
+    cropDisplay() {
+      if (this.cropUnit === '%' && this.imgNaturalWidth) {
+        return {
+          x: +((this.crop.x / this.imgNaturalWidth) * 100).toFixed(1),
+          y: +((this.crop.y / this.imgNaturalHeight) * 100).toFixed(1),
+          width: +((this.crop.width / this.imgNaturalWidth) * 100).toFixed(1),
+          height: +((this.crop.height / this.imgNaturalHeight) * 100).toFixed(1),
+        }
+      }
+      return { ...this.crop }
+    },
   },
   async mounted() {
     const uuid = this.$route.params.uuid
@@ -111,8 +156,146 @@ export default {
       this.imageUuid = uuid
       await this.loadImage()
     }
+    window.addEventListener('resize', this.onResize)
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.onResize)
   },
   methods: {
+    onImgLoad(e) {
+      this.imgLoaded = true
+      this.imgNaturalWidth = e.target.naturalWidth
+      this.imgNaturalHeight = e.target.naturalHeight
+    },
+    onResize() {
+      this.$forceUpdate()
+    },
+    imgScale() {
+      const container = this.$refs.container
+      const img = this.$refs.img
+      if (!container || !img || !this.imgNaturalWidth) return { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, displayW: 0, displayH: 0 }
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      const nw = this.imgNaturalWidth
+      const nh = this.imgNaturalHeight
+      const imgAspect = nw / nh
+      const ca = cw / ch
+      let displayW, displayH, offsetX, offsetY
+      if (imgAspect > ca) {
+        displayW = cw
+        displayH = cw / imgAspect
+        offsetX = 0
+        offsetY = (ch - displayH) / 2
+      } else {
+        displayH = ch
+        displayW = ch * imgAspect
+        offsetX = (cw - displayW) / 2
+        offsetY = 0
+      }
+      return { scaleX: displayW / nw, scaleY: displayH / nh, offsetX, offsetY, displayW, displayH }
+    },
+    blurStyle(r) {
+      const s = this.imgScale()
+      if (!s.displayW) return {}
+      return {
+        left: `${r.x * s.scaleX + s.offsetX}px`,
+        top: `${r.y * s.scaleY + s.offsetY}px`,
+        width: `${r.width * s.scaleX}px`,
+        height: `${r.height * s.scaleY}px`,
+      }
+    },
+    cropWindowStyle() {
+      const s = this.imgScale()
+      if (!s.displayW) return {}
+      return {
+        left: `${this.crop.x * s.scaleX + s.offsetX}px`,
+        top: `${this.crop.y * s.scaleY + s.offsetY}px`,
+        width: `${this.crop.width * s.scaleX}px`,
+        height: `${this.crop.height * s.scaleY}px`,
+        border: '2px dashed var(--accent)',
+      }
+    },
+    cropOverlayStyle() {
+      const s = this.imgScale()
+      if (!s.displayW) return {}
+      const x = this.crop.x * s.scaleX + s.offsetX
+      const y = this.crop.y * s.scaleY + s.offsetY
+      const w = this.crop.width * s.scaleX
+      const h = this.crop.height * s.scaleY
+      return {
+        clipPath: `polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% ${y}px, ${x}px ${y}px, ${x}px ${y + h}px, ${x + w}px ${y + h}px, ${x + w}px ${y}px, 0% ${y}px)`,
+      }
+    },
+    setCrop(field, value) {
+      const v = parseFloat(value) || 0
+      if (this.cropUnit === '%' && this.imgNaturalWidth) {
+        const w = this.imgNaturalWidth
+        const h = this.imgNaturalHeight
+        if (field === 'x' || field === 'width') this.crop[field] = (v / 100) * w
+        else this.crop[field] = (v / 100) * h
+      } else {
+        this.crop[field] = v
+      }
+    },
+    drawRectStyle() {
+      if (!this.drawStart || !this.drawCurrent) return { display: 'none' }
+      const x1 = Math.min(this.drawStart.x, this.drawCurrent.x)
+      const y1 = Math.min(this.drawStart.y, this.drawCurrent.y)
+      const x2 = Math.max(this.drawStart.x, this.drawCurrent.x)
+      const y2 = Math.max(this.drawStart.y, this.drawCurrent.y)
+      const s = this.imgScale()
+      return {
+        left: `${x1 * s.scaleX + s.offsetX}px`,
+        top: `${y1 * s.scaleY + s.offsetY}px`,
+        width: `${(x2 - x1) * s.scaleX}px`,
+        height: `${(y2 - y1) * s.scaleY}px`,
+      }
+    },
+    onMouseDown(e) {
+      if (e.button !== 0 || !this.blurMode) return
+      const container = this.$refs.container
+      if (!container || !this.imgNaturalWidth) return
+      const rect = container.getBoundingClientRect()
+      const s = this.imgScale()
+      this.drawStart = {
+        x: (e.clientX - rect.left - s.offsetX) / s.scaleX,
+        y: (e.clientY - rect.top - s.offsetY) / s.scaleY,
+      }
+      this.drawCurrent = { ...this.drawStart }
+      this.isDrawing = true
+    },
+    onMouseMove(e) {
+      if (!this.isDrawing) return
+      const container = this.$refs.container
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const s = this.imgScale()
+      this.drawCurrent = {
+        x: (e.clientX - rect.left - s.offsetX) / s.scaleX,
+        y: (e.clientY - rect.top - s.offsetY) / s.scaleY,
+      }
+    },
+    onMouseUp() {
+      if (!this.isDrawing || !this.drawStart || !this.drawCurrent) {
+        this.isDrawing = false
+        return
+      }
+      this.isDrawing = false
+      const x = Math.min(this.drawStart.x, this.drawCurrent.x)
+      const y = Math.min(this.drawStart.y, this.drawCurrent.y)
+      const w = Math.abs(this.drawCurrent.x - this.drawStart.x)
+      const h = Math.abs(this.drawCurrent.y - this.drawStart.y)
+      if (w >= 3 && h >= 3) {
+        this.blurRegions.push({
+          x: Math.round(x),
+          y: Math.round(y),
+          width: Math.round(w),
+          height: Math.round(h),
+        })
+      }
+      this.drawStart = null
+      this.drawCurrent = null
+    },
     async handleUpload(e) {
       const file = e.target.files?.[0] || e.dataTransfer?.files?.[0]
       if (!file) return
@@ -162,7 +345,6 @@ export default {
         if (this.showCrop) params.crop = { ...this.crop }
         if (this.blurRegions.length) params.blur = this.blurRegions
         if (this.exportFormat) params.format = this.exportFormat
-
         const res = await api.processImage(this.imageUuid, params)
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
@@ -193,10 +375,17 @@ export default {
 @media (min-width: 1600px) { .editor-layout { grid-template-columns: 1fr 380px; gap: 24px; } }
 @media (min-width: 2200px) { .editor-layout { grid-template-columns: 1fr 420px; gap: 28px; } }
 
-.image-section .image-container { background: var(--bg-video); border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; }
-.image-section img { max-width: 100%; max-height: calc(100vh - 260px); object-fit: contain; }
-@media (min-width: 1600px) { .image-section img { max-height: calc(100vh - 280px); } }
-@media (min-width: 2200px) { .image-section img { max-height: calc(100vh - 320px); } }
+.image-container { background: var(--bg-video); border-radius: 8px; min-height: 300px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+.image-viewport { position: relative; max-width: 100%; max-height: 100%; display: flex; align-items: center; justify-content: center; cursor: default; }
+.image-viewport.blur-mode { cursor: crosshair; }
+.image-viewport img { max-width: 100%; max-height: calc(100vh - 300px); object-fit: contain; display: block; pointer-events: none; }
+@media (min-width: 1600px) { .image-viewport img { max-height: calc(100vh - 320px); } }
+@media (min-width: 2200px) { .image-viewport img { max-height: calc(100vh - 360px); } }
+
+.blur-preview { position: absolute; border: 2px solid rgba(139,92,246,.6); background: rgba(139,92,246,.12); pointer-events: none; z-index: 2; }
+.draw-rect { position: absolute; border: 2px dashed #fff; background: rgba(255,255,255,.1); pointer-events: none; z-index: 5; }
+.crop-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.45); pointer-events: none; z-index: 3; }
+.crop-window { position: absolute; pointer-events: none; z-index: 4; border-radius: 2px; }
 
 .toolbar { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .toolbar select { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; }
@@ -211,6 +400,8 @@ export default {
 .crop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .crop-grid label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .crop-grid input { width: 70px; }
+.unit-btn { background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; line-height: 1.4; }
+.unit-btn:hover { border-color: var(--accent); }
 
 .modal-overlay { position: fixed; inset: 0; background: var(--modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
