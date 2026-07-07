@@ -15,7 +15,9 @@
 
     <div v-else class="editor-layout">
       <div class="video-section">
-        <video ref="video" :src="videoUrl" controls @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded"></video>
+        <div class="video-wrapper">
+          <video ref="video" :src="videoUrl" controls @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded"></video>
+        </div>
 
         <div class="toolbar">
           <button @click="showSubtitleModal = true">
@@ -129,6 +131,8 @@ export default {
       exporting: false,
       subtitleFile: null,
     }
+  },
+  computed: {
   },
   async mounted() {
     const uuid = this.$route.params.uuid
@@ -259,7 +263,9 @@ export default {
 
 .editor-layout { display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
 
-.video-section video { width: 100%; border-radius: 8px; background: #000; max-height: 500px; }
+.video-section .video-wrapper { position: relative; }
+.video-section video { width: 100%; border-radius: 8px; background: #000; max-height: 500px; display: block; }
+
 .toolbar { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .toolbar button { font-size: 13px; padding: 6px 12px; }
 .toolbar button span { margin-right: 4px; }
