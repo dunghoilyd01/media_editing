@@ -18,7 +18,7 @@
         <video ref="video" :src="videoUrl" controls @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded"></video>
 
         <div class="toolbar">
-          <button @click="showSubtitleModal = true" :disabled="!subtitles.length && !subtitleFile">
+          <button @click="showSubtitleModal = true">
             <span>&#10014;</span> Subtitles ({{ subtitles.length }})
           </button>
           <button @click="showBlurModal = true">
@@ -37,6 +37,7 @@
         <h3>Subtitles</h3>
         <div class="subtitle-upload">
           <input type="file" accept=".srt,.vtt,.txt" @change="handleSubtitleUpload" ref="subInput" hidden />
+          <button @click="addSubtitle">+ Add at Current Time</button>
           <button @click="$refs.subInput.click()">Upload SRT</button>
         </div>
         <div class="subtitle-list" ref="subList">
@@ -188,7 +189,8 @@ export default {
         : `${m}:${String(s).padStart(4,'0')}`
     },
     addSubtitle() {
-      this.subtitles.push({ start_time: 0, end_time: 1, text: '' })
+      const currentTime = this.$refs.video?.currentTime || 0
+      this.subtitles.push({ start_time: currentTime, end_time: currentTime + 2, text: '' })
     },
     removeSubtitle(i) { this.subtitles.splice(i, 1) },
     async saveSubtitles() {

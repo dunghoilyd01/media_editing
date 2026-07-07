@@ -21,7 +21,46 @@
       "width": 301,
       "height": 299,
       "created_at": "2026-07-07T06:41:10.814Z"
+    },
+    {
+      "uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "original_name": "jtd7986(1).mp4",
+      "type": "video",
+      "mime_type": "video/mp4",
+      "size": 3034945,
+      "filepath": "uploads/videos/9f46dc62-832c-4279-a045-2bb56856fb94.mp4",
+      "width": 1920,
+      "height": 1080,
+      "created_at": "2026-07-07T07:00:22.981Z"
     }
   ],
-  "subtitles": []
+  "subtitles": [
+    {
+      "id": 1783407644155.1345,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 1,
+      "start_time": 0,
+      "end_time": 2,
+      "text": "what are",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    },
+    {
+      "id": 1783407644156.2559,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 2,
+      "start_time": 3,
+      "end_time": 4,
+      "text": "qwe",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    },
+    {
+      "id": 1783407644157.248,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 3,
+      "start_time": 5,
+      "end_time": 6,
+      "text": "qwewqee",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    }
+  ]
 }
