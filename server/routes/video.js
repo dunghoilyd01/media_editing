@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { execSync, exec } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
@@ -87,48 +87,59 @@ router.post('/export/video/:uuid', (req, res) => {
   const ext = path.extname(inputPath);
   const outputName = `exported-${uuidv4()}${ext}`;
   const outputPath = path.join('uploads/videos', outputName);
+  const hasBlur = blur_regions && blur_regions.length > 0;
+  const hasSubs = subtitleData && subtitleData.length > 0;
 
-  const ffmpegArgs = ['-i', inputPath];
-
-  if (subtitleData && subtitleData.length > 0) {
-    const srtContent = buildSRT(subtitleData);
-    const srtPath = path.join('uploads/videos', `subs-${uuidv4()}.srt`);
-    fs.writeFileSync(srtPath, srtContent);
-    ffmpegArgs.push('-vf', `subtitles=${srtPath.replace(/\\/g, '/').replace(/:/g, '\\:')}`);
-
-    const cmd = `ffmpeg ${ffmpegArgs.join(' ')} -c:v libx264 -preset fast -crf 22 -c:a aac -b:a 128k -y ${outputPath}`;
-    exec(cmd, (execErr) => {
-      if (execErr) return res.status(500).json({ error: 'Export failed', details: execErr.message });
-      res.download(outputPath, `exported-${media.original_name}`, (dlErr) => {
-        if (dlErr) res.status(500).json({ error: 'Download failed' });
-        setTimeout(() => { try { fs.unlinkSync(outputPath); } catch (_) {} }, 60000);
-      });
-    });
-    return;
+  let srtPath = null;
+  if (hasSubs) {
+    srtPath = path.join('uploads/videos', `subs-${uuidv4()}.srt`);
+    fs.writeFileSync(srtPath, buildSRT(subtitleData));
   }
 
-  if (blur_regions && blur_regions.length > 0) {
-    const filterParts = [];
-    blur_regions.forEach((r, i) => {
-      const x = Math.round(parseFloat(r.x));
-      const y = Math.round(parseFloat(r.y));
-      const w = Math.round(parseFloat(r.width));
-      const h = Math.round(parseFloat(r.height));
-      filterParts.push(
-        `[0:v]crop=${w}:${h}:${x}:${y},avgblur=10[blur${i}];` +
-        `[0:v][blur${i}]overlay=${x}:${y}[v${i}]`
-      );
-    });
-    const lastVar = `v${blur_regions.length - 1}`;
-    ffmpegArgs.push('-filter_complex', filterParts.join(';'));
-    ffmpegArgs.push('-map', `[${lastVar}]`);
+  // Build the ffmpeg command as an array to avoid shell escaping issues
+  const args = ['-i', inputPath];
+
+  if (hasBlur || hasSubs) {
+    const chains = [];
+
+    if (hasBlur) {
+      // Chain blur regions sequentially
+      let prev = '0:v';
+      for (let i = 0; i < blur_regions.length; i++) {
+        const r = blur_regions[i];
+        const x = Math.round(parseFloat(r.x));
+        const y = Math.round(parseFloat(r.y));
+        const w = Math.round(parseFloat(r.width));
+        const h = Math.round(parseFloat(r.height));
+        const st = parseFloat(r.start_time) || 0;
+        const et = parseFloat(r.end_time) || 0;
+
+        const cropLabel = `blur${i}`;
+        const outLabel = i === blur_regions.length - 1 && !hasSubs ? 'outv' : `v${i}`;
+
+        chains.push(
+          `[${prev}]crop=${w}:${h}:${x}:${y},avgblur=10[${cropLabel}]`,
+          `[${prev}][${cropLabel}]overlay=${x}:${y}:enable=\'between(t,${st},${et})\'[${outLabel}]`
+        );
+        prev = outLabel;
+      }
+    }
+
+    if (hasSubs) {
+      const escPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+      const inputLabel = hasBlur ? `[${prev}]` : '[0:v]';
+      chains.push(`${inputLabel}subtitles=${escPath}[outv]`);
+    }
+
+    const filterComplex = chains.join(';');
+    args.push('-filter_complex', filterComplex);
+    args.push('-map', '[outv]');
+    args.push('-map', '0:a?');
   }
 
-  ffmpegArgs.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-    '-c:a', 'aac', '-b:a', '128k', '-y', outputPath);
+  args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-b:a', '128k', '-y', outputPath);
 
-  const cmd = `ffmpeg ${ffmpegArgs.join(' ')}`;
-  exec(cmd, (execErr) => {
+  execFile('ffmpeg', args, (execErr) => {
     if (execErr) return res.status(500).json({ error: 'Export failed', details: execErr.message });
     res.download(outputPath, `exported-${media.original_name}`, (dlErr) => {
       if (dlErr) res.status(500).json({ error: 'Download failed' });
