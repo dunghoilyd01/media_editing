@@ -15,9 +15,10 @@
 
     <div v-else class="editor-layout">
       <div class="image-section">
-        <div class="image-container" ref="container"
-          @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp">
-          <div class="image-viewport" :class="{ 'blur-mode': blurMode && !isDrawing }">
+        <div class="image-container">
+          <div class="image-viewport" ref="viewport"
+            @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp"
+            :class="{ 'blur-mode': blurMode && !isDrawing }">
             <img :src="imagePreview" ref="img" :style="imgStyle" @load="onImgLoad" />
             <div v-for="(r, i) in blurRegions" :key="i" class="blur-preview" :style="blurStyle(r)"></div>
             <div v-if="isDrawing" class="draw-rect" :style="drawRectStyle"></div>
@@ -171,28 +172,21 @@ export default {
       this.$forceUpdate()
     },
     imgScale() {
-      const container = this.$refs.container
+      const viewport = this.$refs.viewport
       const img = this.$refs.img
-      if (!container || !img || !this.imgNaturalWidth) return { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, displayW: 0, displayH: 0 }
-      const cw = container.clientWidth
-      const ch = container.clientHeight
-      const nw = this.imgNaturalWidth
-      const nh = this.imgNaturalHeight
-      const imgAspect = nw / nh
-      const ca = cw / ch
-      let displayW, displayH, offsetX, offsetY
-      if (imgAspect > ca) {
-        displayW = cw
-        displayH = cw / imgAspect
-        offsetX = 0
-        offsetY = (ch - displayH) / 2
-      } else {
-        displayH = ch
-        displayW = ch * imgAspect
-        offsetX = (cw - displayW) / 2
-        offsetY = 0
+      if (!viewport || !img || !this.imgNaturalWidth) return { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, displayW: 0, displayH: 0 }
+      const vr = viewport.getBoundingClientRect()
+      const ir = img.getBoundingClientRect()
+      const scaleX = ir.width / this.imgNaturalWidth
+      const scaleY = ir.height / this.imgNaturalHeight
+      return {
+        scaleX: isFinite(scaleX) ? scaleX : 1,
+        scaleY: isFinite(scaleY) ? scaleY : 1,
+        offsetX: ir.left - vr.left,
+        offsetY: ir.top - vr.top,
+        displayW: ir.width,
+        displayH: ir.height,
       }
-      return { scaleX: displayW / nw, scaleY: displayH / nh, offsetX, offsetY, displayW, displayH }
     },
     blurStyle(r) {
       const s = this.imgScale()
@@ -253,9 +247,9 @@ export default {
     },
     onMouseDown(e) {
       if (e.button !== 0 || !this.blurMode) return
-      const container = this.$refs.container
-      if (!container || !this.imgNaturalWidth) return
-      const rect = container.getBoundingClientRect()
+      const viewport = this.$refs.viewport
+      if (!viewport || !this.imgNaturalWidth) return
+      const rect = viewport.getBoundingClientRect()
       const s = this.imgScale()
       this.drawStart = {
         x: (e.clientX - rect.left - s.offsetX) / s.scaleX,
@@ -266,9 +260,9 @@ export default {
     },
     onMouseMove(e) {
       if (!this.isDrawing) return
-      const container = this.$refs.container
-      if (!container) return
-      const rect = container.getBoundingClientRect()
+      const viewport = this.$refs.viewport
+      if (!viewport) return
+      const rect = viewport.getBoundingClientRect()
       const s = this.imgScale()
       this.drawCurrent = {
         x: (e.clientX - rect.left - s.offsetX) / s.scaleX,
@@ -378,11 +372,11 @@ export default {
 .image-container { background: var(--bg-video); border-radius: 8px; min-height: 300px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
 .image-viewport { position: relative; max-width: 100%; max-height: 100%; display: flex; align-items: center; justify-content: center; cursor: default; }
 .image-viewport.blur-mode { cursor: crosshair; }
-.image-viewport img { max-width: 100%; max-height: calc(100vh - 300px); object-fit: contain; display: block; pointer-events: none; }
+.image-viewport img { display: block; max-width: 100%; max-height: calc(100vh - 300px); width: auto; height: auto; pointer-events: none; }
 @media (min-width: 1600px) { .image-viewport img { max-height: calc(100vh - 320px); } }
 @media (min-width: 2200px) { .image-viewport img { max-height: calc(100vh - 360px); } }
 
-.blur-preview { position: absolute; border: 2px solid rgba(139,92,246,.6); background: rgba(139,92,246,.12); pointer-events: none; z-index: 2; }
+.blur-preview { position: absolute; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(139,92,246,.3); pointer-events: none; z-index: 2; }
 .draw-rect { position: absolute; border: 2px dashed #fff; background: rgba(255,255,255,.1); pointer-events: none; z-index: 5; }
 .crop-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.45); pointer-events: none; z-index: 3; }
 .crop-window { position: absolute; pointer-events: none; z-index: 4; border-radius: 2px; }
