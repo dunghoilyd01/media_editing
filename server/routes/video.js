@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadVideo } from '../middleware/upload.js';
-import { insertMedia, findMediaByUUID, findSubtitlesByMedia, replaceSubtitles } from '../store.js';
+import { insertMedia, findMediaByUUID, findSubtitlesByMedia, replaceSubtitles, findItemsByMedia, insertItem, deleteItem, findBlurRegionsByMedia, replaceBlurRegions } from '../store.js';
 
 const router = Router();
 
@@ -71,11 +71,57 @@ router.post('/subtitles/upload/:uuid', uploadVideo, (req, res) => {
   }
 });
 
+router.get('/items/:uuid', (req, res) => {
+  res.json(findItemsByMedia(req.params.uuid));
+});
+
+router.post('/items/:uuid', (req, res, next) => {
+  try {
+    const { timestamp, end_time, x, y, fields } = req.body;
+    if (timestamp === undefined) return res.status(400).json({ error: 'timestamp required' });
+    const item = insertItem({
+      media_uuid: req.params.uuid,
+      timestamp,
+      end_time: end_time ?? null,
+      x: x ?? null,
+      y: y ?? null,
+      fields: fields || [],
+    });
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/items/:id', (req, res) => {
+  const removed = deleteItem(parseFloat(req.params.id));
+  if (!removed) return res.status(404).json({ error: 'Item not found' });
+  res.json({ success: true });
+});
+
 router.post('/export/subtitles/json/:uuid', (req, res) => {
   const subs = findSubtitlesByMedia(req.params.uuid);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename="subtitles-${req.params.uuid}.json"`);
   res.json(subs);
+});
+
+router.post('/export/items/json/:uuid', (req, res) => {
+  const items = findItemsByMedia(req.params.uuid);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="items-${req.params.uuid}.json"`);
+  res.json(items);
+});
+
+router.get('/blur/:uuid', (req, res) => {
+  res.json(findBlurRegionsByMedia(req.params.uuid));
+});
+
+router.post('/blur/:uuid', (req, res) => {
+  const { regions } = req.body;
+  if (!Array.isArray(regions)) return res.status(400).json({ error: 'regions must be an array' });
+  const count = replaceBlurRegions(req.params.uuid, regions);
+  res.json({ success: true, count });
 });
 
 router.post('/export/video/:uuid', (req, res) => {
@@ -101,10 +147,11 @@ router.post('/export/video/:uuid', (req, res) => {
 
   if (hasBlur || hasSubs) {
     const chains = [];
+    let finalOutput = 'outv';
 
     if (hasBlur) {
-      // Chain blur regions sequentially
       let prev = '0:v';
+      let appliedAny = false;
       for (let i = 0; i < blur_regions.length; i++) {
         const r = blur_regions[i];
         const x = Math.round(parseFloat(r.x));
@@ -114,33 +161,44 @@ router.post('/export/video/:uuid', (req, res) => {
         const st = parseFloat(r.start_time) || 0;
         const et = parseFloat(r.end_time) || 0;
 
+        if (w < 1 || h < 1) continue;
+        if (st >= et) continue;
+
         const cropLabel = `blur${i}`;
-        const outLabel = i === blur_regions.length - 1 && !hasSubs ? 'outv' : `v${i}`;
+        const outLabel = `v${i}`;
 
         chains.push(
-          `[${prev}]crop=${w}:${h}:${x}:${y},avgblur=10[${cropLabel}]`,
-          `[${prev}][${cropLabel}]overlay=${x}:${y}:enable=\'between(t,${st},${et})\'[${outLabel}]`
+          `[${prev}]crop=${w}:${h}:${x}:${y},avgblur=40[${cropLabel}]`,
+          `[${prev}][${cropLabel}]overlay=${x}:${y}:enable=between(t\\,${st}\\,${et})[${outLabel}]`
         );
         prev = outLabel;
+        appliedAny = true;
       }
+      if (!appliedAny) return res.status(400).json({ error: 'No valid blur regions to apply' });
+      finalOutput = prev;
     }
 
     if (hasSubs) {
       const escPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-      const inputLabel = hasBlur ? `[${prev}]` : '[0:v]';
+      const inputLabel = hasBlur ? `[${finalOutput}]` : '[0:v]';
       chains.push(`${inputLabel}subtitles=${escPath}[outv]`);
+      finalOutput = 'outv';
     }
 
     const filterComplex = chains.join(';');
     args.push('-filter_complex', filterComplex);
-    args.push('-map', '[outv]');
+    args.push('-map', `[${finalOutput}]`);
     args.push('-map', '0:a?');
   }
 
   args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-b:a', '128k', '-y', outputPath);
 
-  execFile('ffmpeg', args, (execErr) => {
-    if (execErr) return res.status(500).json({ error: 'Export failed', details: execErr.message });
+  execFile('ffmpeg', args, (execErr, stdout, stderr) => {
+    if (srtPath) { try { fs.unlinkSync(srtPath); } catch (_) {} }
+    if (execErr) {
+      const ffmpegLog = (stderr || '').split('\n').slice(-5).join('\n');
+      return res.status(500).json({ error: 'Export failed', details: execErr.message, ffmpegLog });
+    }
     res.download(outputPath, `exported-${media.original_name}`, (dlErr) => {
       if (dlErr) res.status(500).json({ error: 'Download failed' });
       setTimeout(() => { try { fs.unlinkSync(outputPath); } catch (_) {} }, 60000);

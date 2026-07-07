@@ -14,16 +14,40 @@ async function request(url, options = {}) {
   return res
 }
 
+function uploadWithProgress(url, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE}${url}`)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)) }
+        catch { resolve(xhr.responseText) }
+      } else {
+        let msg = 'Upload failed'
+        try { const j = JSON.parse(xhr.responseText); msg = j.error || msg } catch {}
+        reject(new Error(msg))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.send(fd)
+  })
+}
+
 export const api = {
   // Media
   listMedia() { return request('/media/list') },
   deleteMedia(uuid) { return request(`/media/${uuid}`, { method: 'DELETE' }) },
 
   // Video
-  uploadVideo(file) {
-    const fd = new FormData()
-    fd.append('file', file)
-    return request('/video/upload', { method: 'POST', body: fd })
+  uploadVideo(file, onProgress) {
+    return uploadWithProgress('/video/upload', file, onProgress)
   },
   getSubtitles(uuid) { return request(`/video/subtitles/${uuid}`) },
   saveSubtitles(uuid, subtitles) {
@@ -47,12 +71,28 @@ export const api = {
     })
   },
   videoStreamUrl(uuid) { return `${API_BASE}/video/stream/${uuid}` },
+  getItems(uuid) { return request(`/video/items/${uuid}`) },
+  createItem(uuid, data) {
+    return request(`/video/items/${uuid}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+  deleteItem(id) { return request(`/video/items/${id}`, { method: 'DELETE' }) },
+  exportItemsJson(uuid) {
+    return fetch(`${API_BASE}/video/export/items/json/${uuid}`, { method: 'POST' })
+  },
+  getBlurRegions(uuid) { return request(`/video/blur/${uuid}`) },
+  saveBlurRegions(uuid, regions) {
+    return request(`/video/blur/${uuid}`, {
+      method: 'POST',
+      body: JSON.stringify({ regions }),
+    })
+  },
 
   // Image
-  uploadImage(file) {
-    const fd = new FormData()
-    fd.append('file', file)
-    return request('/image/upload', { method: 'POST', body: fd })
+  uploadImage(file, onProgress) {
+    return uploadWithProgress('/image/upload', file, onProgress)
   },
   processImage(uuid, params) {
     return request(`/image/process/${uuid}`, {

@@ -38,17 +38,17 @@ export default {
 <style scoped>
 .home h1 { font-size: 32px; margin-bottom: 24px; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.card { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 32px; text-decoration: none; color: inherit; transition: border-color .2s; }
-.card:hover { border-color: #3b82f6; }
+.card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-decoration: none; color: inherit; transition: border-color .2s; }
+.card:hover { border-color: var(--accent); }
 .card .icon { font-size: 40px; margin-bottom: 12px; }
 .card h2 { margin-bottom: 8px; }
-.card p { color: #888; font-size: 14px; }
+.card p { color: var(--text-secondary); font-size: 14px; }
 .media-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.media-item { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+.media-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
 .media-item .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-.media-item .badge.video { background: #3b82f6; color: #fff; }
-.media-item .badge.image { background: #8b5cf6; color: #fff; }
+.media-item .badge.video { background: var(--accent); color: #fff; }
+.media-item .badge.image { background: var(--purple); color: #fff; }
 .media-item .name { flex: 1; }
-.media-item .info { color: #666; font-size: 13px; }
-.btn-sm { padding: 4px 12px; border-radius: 4px; background: #3b82f6; color: #fff; text-decoration: none; font-size: 13px; }
+.media-item .info { color: var(--text-muted); font-size: 13px; }
+.btn-sm { padding: 4px 12px; border-radius: 4px; background: var(--accent); color: #fff; text-decoration: none; font-size: 13px; }
 </style>

@@ -1,0 +1,33 @@
+{
+  "subtitles": [
+    {
+      "id": 1783407644155.1345,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 1,
+      "start_time": 0,
+      "end_time": 2,
+      "text": "what are",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    },
+    {
+      "id": 1783407644156.2559,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 2,
+      "start_time": 3,
+      "end_time": 4,
+      "text": "qwe",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    },
+    {
+      "id": 1783407644157.248,
+      "media_uuid": "011f866a-35cd-4db3-ac4a-4974677c9605",
+      "sequence": 3,
+      "start_time": 5,
+      "end_time": 6,
+      "text": "qwewqee",
+      "created_at": "2026-07-07T07:00:44.155Z"
+    }
+  ],
+  "items": [],
+  "blur_regions": []
+}

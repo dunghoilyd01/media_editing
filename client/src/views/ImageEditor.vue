@@ -5,11 +5,11 @@
     <div v-if="!imageUuid" class="upload-area">
       <div class="drop-zone" @dragover.prevent @drop.prevent="handleDrop">
         <p>Drag & drop an image here</p>
-        <p style="color:#666;font-size:13px;margin-top:8px;">or</p>
+        <p class="upload-hint">or</p>
         <input type="file" accept="image/*" ref="fileInput" @change="handleUpload" hidden />
         <button @click="$refs.fileInput.click()">Choose File</button>
       </div>
-      <p style="color:#666;font-size:12px;margin-top:8px;">Supports JPEG, PNG, GIF, WebP, TIFF, BMP, SVG, AVIF</p>
+      <p class="upload-hint-sm">Supports JPEG, PNG, GIF, WebP, TIFF, BMP, SVG, AVIF</p>
       <div v-if="uploading" class="progress">Uploading...</div>
     </div>
 
@@ -66,7 +66,7 @@
     <div v-if="showBlurModal" class="modal-overlay" @click.self="showBlurModal = false">
       <div class="modal">
         <h2>Blur Regions</h2>
-        <p style="color:#888;font-size:13px;margin-bottom:12px;">Regions to blur before export.</p>
+        <p class="modal-hint">Regions to blur before export.</p>
         <div class="sub-edit-list">
           <div v-for="(r, i) in blurRegions" :key="i" class="sub-edit-row">
             <label>X <input type="number" v-model.number="r.x" class="time-input-sm" /></label>
@@ -185,35 +185,42 @@ export default {
 <style scoped>
 .image-editor h1 { margin-bottom: 20px; }
 
-.drop-zone { border: 2px dashed #444; border-radius: 12px; padding: 60px; text-align: center; cursor: pointer; }
-.drop-zone:hover { border-color: #8b5cf6; }
-.progress { margin-top: 12px; color: #8b5cf6; }
+.drop-zone { border: 2px dashed var(--border-light); border-radius: 12px; padding: 60px; text-align: center; cursor: pointer; }
+.drop-zone:hover { border-color: var(--purple); }
+.progress { margin-top: 12px; color: var(--purple); }
 
-.editor-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+.editor-layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+@media (min-width: 1600px) { .editor-layout { grid-template-columns: 1fr 380px; gap: 24px; } }
+@media (min-width: 2200px) { .editor-layout { grid-template-columns: 1fr 420px; gap: 28px; } }
 
-.image-section .image-container { background: #111; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; }
-.image-section img { max-width: 100%; max-height: 500px; object-fit: contain; }
+.image-section .image-container { background: var(--bg-video); border-radius: 8px; display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; }
+.image-section img { max-width: 100%; max-height: calc(100vh - 260px); object-fit: contain; }
+@media (min-width: 1600px) { .image-section img { max-height: calc(100vh - 280px); } }
+@media (min-width: 2200px) { .image-section img { max-height: calc(100vh - 320px); } }
 
 .toolbar { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.toolbar select { background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; padding: 6px 10px; border-radius: 6px; }
-.toolbar button.active { background: #8b5cf6; }
+.toolbar select { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; }
+.toolbar button.active { background: var(--purple); }
 
-.info-list div { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #222; }
-.info-list span { color: #888; }
+.info-list div { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.info-list span { color: var(--text-secondary); }
 
-.adjustments label { display: block; font-size: 13px; color: #888; margin-top: 8px; }
+.adjustments label { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
 .adjustments input[type=range] { width: 100%; margin: 4px 0; }
 
 .crop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-.crop-grid label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #888; }
+.crop-grid label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .crop-grid input { width: 70px; }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 24px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+.modal-overlay { position: fixed; inset: 0; background: var(--modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
 .modal h2 { margin-bottom: 8px; }
+.upload-hint { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+.upload-hint-sm { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+.modal-hint { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
 .sub-edit-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
 .sub-edit-row { display: flex; gap: 6px; align-items: center; }
 .time-input-sm { width: 65px; font-family: monospace; }
-.sub-edit-row label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #888; }
+.sub-edit-row label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 .modal-actions { display: flex; gap: 8px; margin-top: 12px; }
 </style>
