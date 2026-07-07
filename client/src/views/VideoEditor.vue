@@ -183,10 +183,9 @@ export default {
     formatTime(t) {
       const h = Math.floor(t / 3600)
       const m = Math.floor((t % 3600) / 60)
-      const s = (t % 60).toFixed(1)
-      return h > 0
-        ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(4,'0')}`
-        : `${m}:${String(s).padStart(4,'0')}`
+      const sec = Math.floor(t % 60)
+      const ms = Math.round((t % 1) * 1000)
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`
     },
     addSubtitle() {
       const currentTime = this.$refs.video?.currentTime || 0
